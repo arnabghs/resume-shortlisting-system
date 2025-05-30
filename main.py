@@ -6,10 +6,21 @@ import nltk
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import uvicorn
+import re
+import logging
+from io import BytesIO
+
+# Configure logging
+logging.basicConfig(
+    filename="errors.log",
+    level=logging.ERROR,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 # Download NLTK data
 nltk.download('punkt')
 nltk.download('punkt_tab')
+nltk.download('stopwords')
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -23,6 +34,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # Database connection
 def get_db():
     try:
@@ -35,74 +47,175 @@ def get_db():
         )
         return conn
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database connection failed: {str(e)}")
+        logging.error(f"Database connection failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database connection failed")
+
 
 # Extract text from PDF
-def extract_text(pdf_file):
+def extract_text(pdf_file, max_size=5 * 1024 * 1024):  # 5MB limit
     try:
+        # Check file size
+        pdf_file.seek(0, 2)  # Move to end of file
+        if pdf_file.tell() > max_size:
+            logging.error("File size exceeds 5MB")
+            raise HTTPException(status_code=400, detail="File size exceeds 5MB")
+        pdf_file.seek(0)  # Reset to start
+
         with pdfplumber.open(pdf_file) as pdf:
             text = "".join(page.extract_text() for page in pdf.pages if page.extract_text())
-        return text if text else ""
+        if not text:
+            logging.error("Resume is empty or unreadable")
+            raise HTTPException(status_code=400, detail="Resume is empty or unreadable")
+        return text
     except Exception as e:
+        logging.error(f"Failed to parse PDF: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {str(e)}")
 
-# Score resume against job description using TF-IDF
-def score_resume(resume_text, job_description):
-    vectorizer = TfidfVectorizer(stop_words='english')
-    tfidf_matrix = vectorizer.fit_transform([resume_text, job_description])
-    similarity = (tfidf_matrix * tfidf_matrix.T).toarray()[0, 1]
-    return similarity * 100
+
+# Extract fields using regex
+def extract_email(resume_text):
+    pattern = r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"
+    match = re.search(pattern, resume_text)
+    return match.group(0) if match else "unknown@example.com"
+
+
+def extract_skills(resume_text):
+    pattern = r"(?:Skills|Technical Skills|Key Skills):?\s*([^\n]+)"
+    match = re.search(pattern, resume_text, re.IGNORECASE)
+    skills = []
+    if match:
+        skills = [s.strip() for s in match.group(1).split(",")]
+    return skills if skills else ["unknown"]
+
+
+def extract_experience(resume_text):
+    pattern = r"(?:Experience|Work Experience):?\s*([^\n]+(?:\n[^\n]+)*)"
+    match = re.search(pattern, resume_text, re.IGNORECASE)
+    return match.group(1).strip() if match else ""
+
+
+# Score resume against job description
+def score_resume(experience_text, skills, job_description, skills_weight=0.3):
+    try:
+        vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1, 2))
+        skills_text = " ".join(skills)
+        skills_score = vectorizer.fit_transform([skills_text, job_description]).toarray()[0, 1] * skills_weight
+        experience_score = vectorizer.fit_transform([experience_text, job_description]).toarray()[0, 1] * (1 - skills_weight)
+        return (skills_score + experience_score) * 100
+    except Exception as e:
+        logging.error(f"TF-IDF scoring failed: {str(e)}")
+        return 0.0
+
+
+@app.post("/api/jobs")
+async def create_job(title: str = Form(...), description: str = Form(...), required_skills: str = Form(...)):
+    if not title.strip() or not description.strip():
+        raise HTTPException(status_code=400, detail="Title and description cannot be empty")
+
+    conn = get_db()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute(
+            "INSERT INTO jobs (title, description, required_skills) VALUES (%s, %s, %s) RETURNING id",
+            (title, description, required_skills)
+        )
+        job_id = cursor.fetchone()['id']
+        conn.commit()
+        return {"id": job_id, "title": title, "message": "Job created successfully"}
+    except Exception as e:
+        logging.error(f"Failed to create job: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create job: {str(e)}")
+    finally:
+        cursor.close()
+        conn.close()
+
 
 @app.post("/api/shortlist")
-async def shortlist_resume(job_desc: str = Form(...), resume: UploadFile = File(...)):
+async def shortlist_resume(job_id: int = Form(...), resume: UploadFile = File(...)):
     # Validate inputs
-    if not job_desc.strip():
-        raise HTTPException(status_code=400, detail="Job description cannot be empty")
     if not resume.filename.endswith('.pdf'):
+        logging.error("Invalid file type uploaded")
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
 
     # Extract resume text
-    resume_text = extract_text(resume.file)
-    if not resume_text:
-        raise HTTPException(status_code=400, detail="Resume is empty or unreadable")
+    resume_text = extract_text(BytesIO(await resume.read()))
 
-
-    # Parse basic fields
-    name = resume.filename.split('.')[0]
-    skills = " ".join(nltk.word_tokenize(resume_text.lower())[:50])  # Basic skill extraction
+    # Parse fields
+    name = resume.filename.split('.')[0]  # Simplified name extraction
+    email = extract_email(resume_text)
+    skills = extract_skills(resume_text)
+    experience = extract_experience(resume_text)
 
     # Save to database
     conn = get_db()
     try:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         cursor.execute(
-            "INSERT INTO candidates (name, resume_text) VALUES (%s, %s) RETURNING id",
-            (name, resume_text)
+            "INSERT INTO candidates (name, email, resume_text) VALUES (%s, %s, %s) RETURNING id",
+            (name, email, resume_text)
         )
         candidate_id = cursor.fetchone()['id']
+        for skill in skills:
+            cursor.execute(
+                "INSERT INTO skills (candidate_id, skill) VALUES (%s, %s)",
+                (candidate_id, skill)
+            )
         cursor.execute(
-            "INSERT INTO skills (candidate_id, skill) VALUES (%s, %s)",
-            (candidate_id, skills)
+            "INSERT INTO experience (candidate_id, description) VALUES (%s, %s)",
+            (candidate_id, experience)
         )
         conn.commit()
     except Exception as e:
-        conn.close()
+        logging.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+    # Fetch job description
+    try:
+        cursor.execute("SELECT description FROM jobs WHERE id = %s", (job_id,))
+        job = cursor.fetchone()
+        if not job:
+            logging.error(f"Job ID {job_id} not found")
+            raise HTTPException(status_code=404, detail="Job not found")
+        job_description = job['description']
+    except Exception as e:
+        logging.error(f"Failed to fetch job: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch job: {str(e)}")
 
     # Fetch all candidates and rank
     try:
-        cursor.execute("SELECT id, name, resume_text FROM candidates")
+        cursor.execute("""
+                       SELECT c.id,
+                              c.name,
+                              c.email,
+                              e.description      AS experience,
+                              ARRAY_AGG(s.skill) AS skills
+                       FROM candidates c
+                                LEFT JOIN skills s ON c.id = s.candidate_id
+                                LEFT JOIN experience e ON c.id = e.candidate_id
+                       GROUP BY c.id, e.description
+                       """)
         candidates = cursor.fetchall()
         results = []
         for candidate in candidates:
-            score = score_resume(candidate['resume_text'], job_desc)
-            results.append({"id": candidate['id'], "name": candidate['name'], "score": score})
+            skills = candidate['skills'] if candidate['skills'] else ['unknown']
+            experience = candidate['experience'] if candidate['experience'] else ''
+            score = score_resume(experience, skills, job_description)
+            results.append({
+                "id": candidate['id'],
+                "name": candidate['name'],
+                "email": candidate['email'],
+                "score": score
+            })
         results = sorted(results, key=lambda x: x['score'], reverse=True)
+    except Exception as e:
+        logging.error(f"Ranking failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Ranking failed: {str(e)}")
     finally:
         cursor.close()
         conn.close()
 
     return {"results": results}
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

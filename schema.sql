@@ -13,6 +13,13 @@ CREATE TABLE skills
     skill        VARCHAR(255)
 );
 
+CREATE TABLE experience
+(
+    id           SERIAL PRIMARY KEY,
+    candidate_id INTEGER REFERENCES candidates (id),
+    description  TEXT
+);
+
 CREATE TABLE jobs
 (
     id              SERIAL PRIMARY KEY,
