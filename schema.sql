@@ -10,7 +10,7 @@ CREATE TABLE candidates
 (
     id          SERIAL PRIMARY KEY,
     name        VARCHAR(255) NOT NULL,
-    email       VARCHAR(255),
+    email       VARCHAR(255) UNIQUE,
     resume_text TEXT,
     job_id      INTEGER REFERENCES jobs (id)
 );
