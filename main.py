@@ -130,12 +130,27 @@ async def create_job(title: str = Form(...), description: str = Form(...), requi
         conn.close()
 
 
-@app.post("/api/shortlist")
-async def shortlist_resume(job_id: int = Form(...), resume: UploadFile = File(...)):
+@app.post("/api/apply")
+async def apply_for_job(job_id: int = Form(...), resume: UploadFile = File(...)):
     # Validate inputs
     if not resume.filename.endswith('.pdf'):
         logging.error("Invalid file type uploaded")
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
+
+    # Check if job exists
+    conn = get_db()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT id FROM jobs WHERE id = %s", (job_id,))
+        if not cursor.fetchone():
+            logging.error(f"Job ID {job_id} not found")
+            raise HTTPException(status_code=404, detail="Job not found")
+    except Exception as e:
+        logging.error(f"Failed to verify job: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to verify job: {str(e)}")
+    finally:
+        cursor.close()
+        conn.close()
 
     # Extract resume text
     resume_text = extract_text(BytesIO(await resume.read()))
@@ -151,8 +166,8 @@ async def shortlist_resume(job_id: int = Form(...), resume: UploadFile = File(..
     try:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         cursor.execute(
-            "INSERT INTO candidates (name, email, resume_text) VALUES (%s, %s, %s) RETURNING id",
-            (name, email, resume_text)
+            "INSERT INTO candidates (name, email, resume_text, job_id) VALUES (%s, %s, %s, %s) RETURNING id",
+            (name, email, resume_text, job_id)
         )
         candidate_id = cursor.fetchone()['id']
         for skill in skills:
@@ -168,9 +183,21 @@ async def shortlist_resume(job_id: int = Form(...), resume: UploadFile = File(..
     except Exception as e:
         logging.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        cursor.close()
+        conn.close()
 
-    # Fetch job description
+    return {"message": f"CV uploaded successfully for job ID {job_id}", "candidate_id": candidate_id}
+
+
+@app.get("/api/shortlist")
+async def shortlist_candidates(job_id: int, limit: int = 0):
+    # Intended for admin use only (authentication can be added later)
+
+    # Validate job_id
+    conn = get_db()
     try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
         cursor.execute("SELECT description FROM jobs WHERE id = %s", (job_id,))
         job = cursor.fetchone()
         if not job:
@@ -181,10 +208,10 @@ async def shortlist_resume(job_id: int = Form(...), resume: UploadFile = File(..
         logging.error(f"Failed to fetch job: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch job: {str(e)}")
 
-    # Fetch all candidates and rank
+    # Fetch candidates for the job
     try:
         cursor.execute("""
-                       SELECT c.id,
+                       SELECT c.id AS candidate_id,
                               c.name,
                               c.email,
                               e.description      AS experience,
@@ -192,9 +219,13 @@ async def shortlist_resume(job_id: int = Form(...), resume: UploadFile = File(..
                        FROM candidates c
                                 LEFT JOIN skills s ON c.id = s.candidate_id
                                 LEFT JOIN experience e ON c.id = e.candidate_id
+                       WHERE c.job_id = %s
                        GROUP BY c.id, e.description
-                       """)
+                       """, (job_id,))
         candidates = cursor.fetchall()
+        if not candidates:
+            return {"results": []}
+
         results = []
         for candidate in candidates:
             skills = candidate['skills'] if candidate['skills'] else ['unknown']
@@ -207,6 +238,10 @@ async def shortlist_resume(job_id: int = Form(...), resume: UploadFile = File(..
                 "score": score
             })
         results = sorted(results, key=lambda x: x['score'], reverse=True)
+
+        # Apply limit if specified
+        if limit > 0:
+            results = results[:limit]
     except Exception as e:
         logging.error(f"Ranking failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Ranking failed: {str(e)}")

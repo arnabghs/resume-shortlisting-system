@@ -7,12 +7,19 @@ curl --location 'http://localhost:8000/api/jobs' \
 --form 'required_skills="Python, SQL, FastAPI"'
 ```
 
-Sample curl to get resume scores :
+Sample curl to apply for jobs :
 ```
-curl --location 'http://localhost:8000/api/shortlist' \
+curl --location 'http://localhost:8000/api/apply' \
 --form 'job_id="1"' \
---form 'resume=@"Tom.pdf"'
+--form 'resume=@"/Users/arnab.ghosh1/Documents/Tom.pdf"'
 ```
+
+Sample curl to shortlist candidates for a job:
+```
+ curl --location 'http://localhost:8000/api/shortlist?job_id=1&limit=10'
+```
+
+
 
 Sample Resumes:
 
@@ -29,5 +36,13 @@ John Doe
 Email: john.doe@example.com
 Skills: Python, Java, SQL,
 Experience: Software Developer at XYZ Corp (2022–2024) with 2 years
+experience
+
+---
+
+Tom Field
+Email: tom.field@example.com
+Skills: Angular, SQL, Typescript
+Experience: Tech Lead at XYZ Corp (2020–2024) with 4 years
 experience
 ```
