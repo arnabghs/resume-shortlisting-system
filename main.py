@@ -158,18 +158,48 @@ async def apply_for_job(job_id: int = Form(...), resume: UploadFile = File(...))
     # Parse fields
     name = resume.filename.split('.')[0]  # Simplified name extraction
     email = extract_email(resume_text)
+    if not email:
+        logging.error("No valid email found in resume")
+        raise HTTPException(status_code=400, detail="No valid email found in resume")
     skills = extract_skills(resume_text)
     experience = extract_experience(resume_text)
 
-    # Save to database
+    # Upsert candidate
     conn = get_db()
     try:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute(
-            "INSERT INTO candidates (name, email, resume_text, job_id) VALUES (%s, %s, %s, %s) RETURNING id",
-            (name, email, resume_text, job_id)
-        )
-        candidate_id = cursor.fetchone()['id']
+        # Check if candidate exists
+        cursor.execute("SELECT id FROM candidates WHERE email = %s", (email,))
+        existing_candidate = cursor.fetchone()
+
+        if existing_candidate:
+            candidate_id = existing_candidate['id']
+            # Update candidate
+            cursor.execute(
+                """
+                UPDATE candidates
+                SET name        = %s,
+                    resume_text = %s,
+                    job_id      = %s
+                WHERE email = %s
+                """,
+                (name, resume_text, job_id, email)
+            )
+            # Delete existing skills and experience
+            cursor.execute("DELETE FROM skills WHERE candidate_id = %s", (candidate_id,))
+            cursor.execute("DELETE FROM experience WHERE candidate_id = %s", (candidate_id,))
+        else:
+            # Insert new candidate
+            cursor.execute(
+                """
+                INSERT INTO candidates (name, email, resume_text, job_id)
+                VALUES (%s, %s, %s, %s) RETURNING id
+                """,
+                (name, email, resume_text, job_id)
+            )
+            candidate_id = cursor.fetchone()['id']
+
+        # Insert skills and experience
         for skill in skills:
             cursor.execute(
                 "INSERT INTO skills (candidate_id, skill) VALUES (%s, %s)",
@@ -187,7 +217,10 @@ async def apply_for_job(job_id: int = Form(...), resume: UploadFile = File(...))
         cursor.close()
         conn.close()
 
-    return {"message": f"CV uploaded successfully for job ID {job_id}", "candidate_id": candidate_id}
+    return {
+        "message": f"CV {'updated' if existing_candidate else 'uploaded'} successfully for job ID {job_id}",
+        "candidate_id": candidate_id
+    }
 
 
 @app.get("/api/shortlist")
@@ -232,7 +265,7 @@ async def shortlist_candidates(job_id: int, limit: int = 0):
             experience = candidate['experience'] if candidate['experience'] else ''
             score = score_resume(experience, skills, job_description)
             results.append({
-                "id": candidate['id'],
+                "id": candidate['candidate_id'],
                 "name": candidate['name'],
                 "email": candidate['email'],
                 "score": score
