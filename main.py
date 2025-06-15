@@ -244,7 +244,7 @@ async def shortlist_candidates(job_id: int, limit: int = 0):
     # Fetch candidates for the job
     try:
         cursor.execute("""
-                       SELECT c.id AS candidate_id,
+                       SELECT c.id               AS candidate_id,
                               c.name,
                               c.email,
                               e.description      AS experience,
