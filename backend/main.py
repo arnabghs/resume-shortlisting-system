@@ -12,7 +12,7 @@ from io import BytesIO
 
 # Configure logging
 logging.basicConfig(
-    filename="errors.log",
+    filename="../errors.log",
     level=logging.ERROR,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
