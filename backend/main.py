@@ -95,7 +95,7 @@ def extract_experience(resume_text):
 
 
 # Score resume against job description
-def score_resume(experience_text, skills, job_description, skills_weight=0.3):
+def score_resume(experience_text, skills, job_description, skills_weight=0.7):
     try:
         vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1, 2))
         skills_text = " ".join(skills)
