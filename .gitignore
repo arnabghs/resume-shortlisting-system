@@ -1,3 +1,32 @@
 .idea
-venv
+
+# backend app
+backend/venv
 errors.log
+backend/__pycache__/
+
+
+# frontend app
+frontend/src/logs
+frontend/src/*.log
+frontend/src/npm-debug.log*
+frontend/src/yarn-debug.log*
+frontend/src/yarn-error.log*
+frontend/src/pnpm-debug.log*
+frontend/src/lerna-debug.log*
+
+frontend/src/node_modules
+frontend/src/dist
+frontend/src/dist-ssr
+frontend/src/*.local
+
+# Editor directories and files
+frontend/src/.vscode/*
+frontend/src/!.vscode/extensions.json
+frontend/src/.idea
+frontend/src/.DS_Store
+frontend/src/*.suo
+frontend/src/*.ntvs*
+frontend/src/*.njsproj
+frontend/src/*.sln
+frontend/src/*.sw?

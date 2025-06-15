@@ -1,6 +1,7 @@
-## About
+# Job Application Management System
 
-This application is a job application management system built using FastAPI and PostgreSQL. It allows users to post job listings, apply for jobs with resumes, and shortlist candidates based on their skills and experience.
+This application is a job application management system built using FastAPI and PostgreSQL. It allows users to post job
+listings, apply for jobs with resumes, and shortlist candidates based on their skills and experience.
 
 ### Features
 
@@ -10,6 +11,7 @@ This application is a job application management system built using FastAPI and 
 - Store job listings and applications in a PostgreSQL database.
 
 ### Technologies Used
+
 - FastAPI: A modern, fast (high-performance), web framework for building APIs
 - PostgreSQL: A powerful, open source object-relational database system.
 - Docker: To run the PostgreSQL database in a containerized environment.
@@ -18,9 +20,24 @@ This application is a job application management system built using FastAPI and 
 
 ---
 
-## Development Environment Setup for Unix
+# Development Environment Setup for Unix
 
-Run the PostgresSQL database with Docker
+## Prerequisites
+
+- Python 3.8 or higher
+- Node.js
+- Docker
+
+## Backend Setup
+
+1. Go to `backend` directory
+
+```
+cd backend
+```
+
+2. Run the PostgresSQL database with Docker
+
 ```
 docker run --name my-postgres \
   -e POSTGRES_USER=myuser \
@@ -28,28 +45,57 @@ docker run --name my-postgres \
   -e POSTGRES_DB=resume_db \
   -p 5432:5432 \
   -d postgres:15
-7d4ac160b8e0af230dae66216ed9fcd76f8cf6d05fb499764de8516d528640f3
 ```
 
-Run the Schema migrations to create the necessary tables in the database:
+3. Run the Schema migrations to create the necessary tables in the database:
+
 ```
 docker exec -i my-postgres psql -U myuser -d resume_db < schema.sql
 ```
 
-Activate the virtual environment and
+4. Create a virtual environment:
+
+```
+python3 -m venv venv
+```
+
+5. Activate the virtual environment and
+
 ```
 source venv/bin/activate
 
 ```
 
-Install the required packages:
+6. Install the required packages:
+
 ```
 pip install -r requirements.txt
 ```
 
-Run the FastAPI application:
+7. Run the FastAPI application inside venv:
+
 ```
 uvicorn main:app --reload
+```
+
+## Frontend Setup
+
+1. Go to `frontend` directory
+
+```
+cd frontend
+```
+
+2. Install dependencies
+
+```
+npm install
+```
+
+3. Run the frontend application
+
+```
+npm run dev
 ```
 
 -------
@@ -65,6 +111,7 @@ curl --location 'http://localhost:8000/api/jobs' \
 ```
 
 Sample curl to apply for jobs :
+
 ```
 curl --location 'http://localhost:8000/api/apply' \
 --form 'job_id="1"' \
@@ -72,11 +119,10 @@ curl --location 'http://localhost:8000/api/apply' \
 ```
 
 Sample curl to shortlist candidates for a job:
+
 ```
  curl --location 'http://localhost:8000/api/shortlist?job_id=1&limit=10'
 ```
-
-
 
 Sample Resumes:
 
