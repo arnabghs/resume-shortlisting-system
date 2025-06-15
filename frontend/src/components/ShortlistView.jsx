@@ -31,7 +31,7 @@ function ShortlistView() {
                         type="number"
                         value={jobId}
                         onChange={(e) => setJobId(e.target.value)}
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2"
                         required
                     />
                 </div>
@@ -41,7 +41,7 @@ function ShortlistView() {
                         type="number"
                         value={limit}
                         onChange={(e) => setLimit(e.target.value)}
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2"
                         placeholder="e.g., 5"
                     />
                 </div>

@@ -40,7 +40,7 @@ function JobForm() {
                         name="title"
                         value={formData.title}
                         onChange={handleChange}
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2"
                         required
                     />
                 </div>
@@ -50,7 +50,7 @@ function JobForm() {
                         name="description"
                         value={formData.description}
                         onChange={handleChange}
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2"
                         rows="4"
                         required
                     />
@@ -62,7 +62,7 @@ function JobForm() {
                         name="required_skills"
                         value={formData.required_skills}
                         onChange={handleChange}
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2"
                         placeholder="e.g., Python, SQL, FastAPI"
                         required
                     />
